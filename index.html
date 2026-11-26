@@ -22,6 +22,10 @@
   --warn-fg: #b4231f;
   --ok-bg: #e4f7ee;
   --ok-fg: #1f7a4d;
+  --meter-green: #1f9d55;
+  --meter-yellow: #c99a06;
+  --meter-orange: #d9700f;
+  --meter-red: #d6393f;
   font-family: 'Inter', system-ui, sans-serif;
 }
 @media (prefers-color-scheme: dark) {
@@ -31,6 +35,7 @@
     --stat: #f87171; --stat-soft: #3a1d1d; --none: #27223b;
     --accent: #8b7ff5; --accent-soft: #2a2447;
     --warn-bg: #3a1d1d; --warn-fg: #ff8d87; --ok-bg: #16301f; --ok-fg: #7fe0ac;
+    --meter-green: #34d399; --meter-yellow: #fbbf24; --meter-orange: #fb923c; --meter-red: #f87171;
     color-scheme: dark;
   }
 }
@@ -40,6 +45,7 @@
   --stat: #f87171; --stat-soft: #3a1d1d; --none: #27223b;
   --accent: #8b7ff5; --accent-soft: #2a2447;
   --warn-bg: #3a1d1d; --warn-fg: #ff8d87; --ok-bg: #16301f; --ok-fg: #7fe0ac;
+  --meter-green: #34d399; --meter-yellow: #fbbf24; --meter-orange: #fb923c; --meter-red: #f87171;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -56,6 +62,20 @@ h1 { font-family: 'Space Grotesk', system-ui, sans-serif; font-size: 1.15rem; ma
 .legend { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 0.72rem; color: var(--muted); margin-bottom: 16px; }
 .legend span { display: inline-flex; align-items: center; gap: 5px; }
 .sw { width: 12px; height: 12px; border-radius: 4px; display: inline-block; }
+.board-layout { display: flex; gap: 14px; align-items: flex-start; }
+.board-layout .card { flex: 1; min-width: 0; }
+.meters { display: flex; gap: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 14px 12px; flex-shrink: 0; margin-bottom: 16px; }
+.meter { display: flex; flex-direction: column; align-items: center; gap: 7px; width: 44px; }
+.meter-count { font-size: 0.72rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.meter-track { width: 20px; height: 150px; border-radius: 99px; background: var(--none); overflow: hidden; display: flex; align-items: flex-end; border: 1px solid var(--border); }
+.meter-fill { width: 100%; border-radius: 99px; transition: height 0.4s ease, background 0.4s ease; }
+.meter-finish { font-size: 0.6rem; color: var(--muted); }
+.meter-label { font-size: 0.66rem; color: var(--muted); font-weight: 700; text-align: center; line-height: 1.2; }
+@media (max-width: 640px) {
+  .board-layout { flex-direction: column-reverse; }
+  .meters { width: 100%; justify-content: center; }
+  .meter-track { height: 70px; }
+}
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 16px; margin-bottom: 16px; overflow: hidden; }
 .card-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
 .card-head b { font-size: 0.95rem; font-family: 'Space Grotesk', system-ui, sans-serif; }
@@ -231,7 +251,8 @@ function renderCombined(groups) {
   const latestEnd = groups.reduce((max, g) => (g.end > max ? g.end : max), groups[0].end);
   const months = daysInMonthRange(earliestStart, latestEnd);
 
-  let html = '<div class="card">';
+  let html = '<div class="board-layout">';
+  html += '<div class="card">';
   html += '<div class="card-head"><b>REDEP Shift Board</b></div>';
   html += '<div style="display:flex;flex-wrap:wrap;gap:16px;font-size:0.85rem;color:var(--muted);margin-bottom:10px">';
   for (const g of groups) html += '<span><b style="color:var(--fg)">' + escapeHtml(g.label.replace('REDEP Winter 2027 ', '')) + '</b>: ' + g.assigned + ' / ' + g.target + ' filled</span>';
@@ -304,7 +325,35 @@ function renderCombined(groups) {
   }
 
   html += '</div>';
+
+  html += '<div class="meters">';
+  for (const g of groups) html += meterHtml(g);
+  html += '</div>';
+
+  html += '</div>';
   return html;
+}
+
+function meterColor(assigned) {
+  if (assigned >= 30) return 'var(--meter-green)';
+  if (assigned >= 25) return 'var(--meter-yellow)';
+  if (assigned >= 20) return 'var(--meter-orange)';
+  return 'var(--meter-red)';
+}
+
+// A little race-to-30 meter per group: how full their shift target is,
+// color-graded so a glance says whether a group is in good shape or needs
+// help, not just a bare fraction.
+function meterHtml(g) {
+  const pct = Math.max(0, Math.min(100, Math.round((g.assigned / g.target) * 100)));
+  const color = meterColor(g.assigned);
+  const shortLabel = escapeHtml(g.label.replace('REDEP Winter 2027 ', ''));
+  return '<div class="meter">' +
+    '<div class="meter-count" style="color:' + color + '">' + g.assigned + '/' + g.target + '</div>' +
+    '<div class="meter-finish">🏁</div>' +
+    '<div class="meter-track"><div class="meter-fill" style="height:' + pct + '%;background:' + color + '"></div></div>' +
+    '<div class="meter-label">' + shortLabel + '</div>' +
+    '</div>';
 }
 
 function formatLong(d) {
