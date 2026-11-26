@@ -226,11 +226,16 @@ function dayNum(d) { return Number(d.slice(8,10)); }
 function renderCellContents(shifts, isStat) {
   if (isStat) return '<div class="half stat">STAT</div>';
   if (!shifts || shifts.length === 0) return '';
-  return shifts.map((s) => {
-    const kindClass = s.type === state.nightType ? 'night' : 'day';
-    const label = s.status === 'assigned' ? escapeHtml((s.name || '').split(' ')[0]) : 'OPEN';
-    return '<div class="half ' + kindClass + ' ' + s.status + '">' + label + '</div>';
-  }).join('');
+  // An unassigned shift (whether it's a brand-new slot or one someone just
+  // cleared) shows as a plain blank cell -- tap it to see what's open. No
+  // "OPEN" label cluttering the grid.
+  return shifts
+    .filter((s) => s.status === 'assigned')
+    .map((s) => {
+      const kindClass = s.type === state.nightType ? 'night' : 'day';
+      return '<div class="half ' + kindClass + ' assigned">' + escapeHtml((s.name || '').split(' ')[0]) + '</div>';
+    })
+    .join('');
 }
 
 // One grid per month, shared date columns, with a row per group underneath
@@ -287,7 +292,8 @@ function renderCombined(groups) {
 
         const shifts = cellsByDate[d] || [];
         const isSel = selected && selected.programId === group.programId && selected.date === d;
-        const cls = (!isStat && shifts.length === 0) ? 'cell none' : 'cell';
+        const hasAssigned = shifts.some((s) => s.status === 'assigned');
+        const cls = (!isStat && !hasAssigned) ? 'cell none' : 'cell';
         html += '<div class="' + cls + (isSel ? ' selected' : '') + '" style="grid-row:' + rowIndex + ';grid-column:' + (i + 2) + '" data-program="' + group.programId + '" data-date="' + d + '">';
         html += renderCellContents(shifts, isStat);
         html += '</div>';
