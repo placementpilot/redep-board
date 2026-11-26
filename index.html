@@ -112,12 +112,9 @@ button.act:disabled { opacity: 0.5; cursor: default; }
 
 <div class="legend">
   <span><span class="sw" style="background:var(--day)"></span>Day, assigned</span>
-  <span><span class="sw" style="background:var(--day-soft)"></span>Day, open</span>
   <span><span class="sw" style="background:var(--night)"></span>Night, assigned</span>
-  <span><span class="sw" style="background:var(--night-soft)"></span>Night, open</span>
-  <span><span class="sw" style="background:var(--stat)"></span>Stat holiday</span>
   <span><span class="sw" style="background:var(--none)"></span>Not available</span>
-  <span><span class="sw" style="background:var(--surface);border:1px solid var(--border)"></span>Open, tap to add</span>
+  <span><span class="sw" style="background:var(--stat)"></span>Stat holiday</span>
 </div>
 
 <div id="toast"></div>
@@ -135,6 +132,7 @@ let state = null;
 let selected = null; // { programId, date }
 let busyKey = '';
 let draftNames = {}; // key "programId-date-type" -> text being typed
+let monthScrollLeft = {}; // key month label -> last scrollLeft, so re-rendering after a click doesn't snap back to the start
 
 // Always the whole calendar month (1st through the last day), regardless of
 // where the practicum window happens to start/end mid-month -- a grid that
@@ -242,7 +240,7 @@ function renderCombined(groups) {
   for (const month of months) {
     const nCols = month.days.length;
     html += '<div style="font-size:0.74rem;font-weight:700;color:var(--muted);margin:12px 0 4px">' + month.label + '</div>';
-    html += '<div class="month-scroll"><div class="month-grid" style="grid-template-columns: 68px repeat(' + nCols + ', 54px); grid-template-rows: auto repeat(' + groups.length + ', auto);">';
+    html += '<div class="month-scroll" data-month="' + escapeHtml(month.label) + '"><div class="month-grid" style="grid-template-columns: 68px repeat(' + nCols + ', 54px); grid-template-rows: auto repeat(' + groups.length + ', auto);">';
 
     html += '<div class="rowlabel" style="grid-row:1;grid-column:1"></div>';
     month.days.forEach((d, i) => {
@@ -351,6 +349,12 @@ function render() {
   if (!state) return;
   const app = document.getElementById('app');
   app.innerHTML = renderCombined(state.groups);
+
+  app.querySelectorAll('.month-scroll').forEach((el) => {
+    const month = el.dataset.month;
+    if (month in monthScrollLeft) el.scrollLeft = monthScrollLeft[month];
+    el.addEventListener('scroll', () => { monthScrollLeft[month] = el.scrollLeft; });
+  });
 
   app.querySelectorAll('.cell').forEach((el) => {
     el.addEventListener('click', () => {
