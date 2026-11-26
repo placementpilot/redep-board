@@ -312,12 +312,12 @@ function renderCombined(groups) {
         // No shift exists yet this day -- offer to add either type as a
         // brand-new shift, same "assign" action the backend already
         // supports for a slot that doesn't exist.
-        html += shiftRowHtml({ type: state.dayType, status: 'unassigned', name: null }, match.group.programId, selectedDay.date, state.dayType, state.nightType, selectedDay.otherGroupTypes.includes(state.dayType));
-        html += shiftRowHtml({ type: state.nightType, status: 'unassigned', name: null }, match.group.programId, selectedDay.date, state.dayType, state.nightType, selectedDay.otherGroupTypes.includes(state.nightType));
+        html += shiftRowHtml({ type: state.dayType, status: 'unassigned', name: null }, match.group.programId, selectedDay.date, state.dayType, state.nightType, selectedDay.blockedTypes[state.dayType] || null);
+        html += shiftRowHtml({ type: state.nightType, status: 'unassigned', name: null }, match.group.programId, selectedDay.date, state.dayType, state.nightType, selectedDay.blockedTypes[state.nightType] || null);
       } else {
         for (const s of selectedDay.cells) {
-          const blocked = s.status === 'unassigned' && selectedDay.otherGroupTypes.includes(s.type);
-          html += shiftRowHtml(s, match.group.programId, selectedDay.date, state.dayType, state.nightType, blocked);
+          const blockedReason = s.status === 'unassigned' ? (selectedDay.blockedTypes[s.type] || null) : null;
+          html += shiftRowHtml(s, match.group.programId, selectedDay.date, state.dayType, state.nightType, blockedReason);
         }
       }
       html += '</div>';
@@ -361,7 +361,7 @@ function formatLong(d) {
   return new Date(y, m - 1, dd).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
 }
 
-function shiftRowHtml(s, programId, date, dayType, nightType, blockedByOtherGroup) {
+function shiftRowHtml(s, programId, date, dayType, nightType, blockedReason) {
   const key = programId + '-' + date + '-' + s.type;
   const busy = busyKey === key;
   const label = s.type === nightType ? 'Night' : 'Day';
@@ -370,11 +370,11 @@ function shiftRowHtml(s, programId, date, dayType, nightType, blockedByOtherGrou
     right = '<button type="button" class="act remove" data-remove="' + key + '" ' + (busy ? 'disabled' : '') + '>Clear</button>';
     return '<div class="shift-row"><div class="label">' + label + '</div><div class="who">' + escapeHtml(s.name) + '</div>' + right + '</div>';
   }
-  if (blockedByOtherGroup) {
-    // Don't even offer the name field -- the floor-exclusivity rule would
-    // reject it anyway, so say why up front instead of letting someone
-    // type a name and get bounced.
-    return '<div class="shift-row"><div class="label">' + label + '</div><div class="who" style="color:var(--warn-fg)">Not available — the other group already has a shift this day</div></div>';
+  if (blockedReason) {
+    // Don't even offer the name field -- the backend rule would reject it
+    // anyway, so say why up front instead of letting someone type a name
+    // and get bounced.
+    return '<div class="shift-row"><div class="label">' + label + '</div><div class="who" style="color:var(--warn-fg)">Not available — ' + escapeHtml(blockedReason) + '</div></div>';
   }
   const draft = draftNames[key] || '';
   right = '<div class="name-form">' +
