@@ -314,15 +314,16 @@ function renderCombined(groups) {
       html += '<div class="panel"><div class="date">' + escapeHtml(match.group.label.replace('REDEP Winter 2027 ', '')) + ' — ' + formatLong(selectedDay.date) + (selectedDay.isStatHoliday ? ' — Statutory holiday' : '') + '</div>';
       if (selectedDay.isStatHoliday) {
         html += '<div style="font-size:0.82rem;color:var(--muted)">Statutory holiday — no shift can be added.</div>';
-      } else if (selectedDay.cells.length === 0) {
-        // No shift exists yet this day -- offer to add either type as a
-        // brand-new shift, same "assign" action the backend already
-        // supports for a slot that doesn't exist.
-        html += shiftRowHtml({ type: state.dayType, status: 'unassigned', name: null }, match.group.programId, selectedDay.date, state.dayType, state.nightType, selectedDay.blockedTypes[state.dayType] || null);
-        html += shiftRowHtml({ type: state.nightType, status: 'unassigned', name: null }, match.group.programId, selectedDay.date, state.dayType, state.nightType, selectedDay.blockedTypes[state.nightType] || null);
       } else {
-        for (const s of selectedDay.cells) {
-          const blockedReason = s.status === 'unassigned' ? (selectedDay.blockedTypes[s.type] || null) : null;
+        // Always offer both Day and Night, using whichever row already
+        // exists for that type if there is one, and a brand-new unassigned
+        // placeholder otherwise -- a date in the underlying schedule can
+        // have just one of the two shift rows, but both should still be
+        // offered here (the backend already supports adding either as a
+        // fresh shift, same as when neither row exists yet).
+        for (const type of [state.dayType, state.nightType]) {
+          const s = selectedDay.cells.find((c) => c.type === type) || { type, status: 'unassigned', name: null };
+          const blockedReason = s.status === 'unassigned' ? (selectedDay.blockedTypes[type] || null) : null;
           html += shiftRowHtml(s, match.group.programId, selectedDay.date, state.dayType, state.nightType, blockedReason);
         }
       }
