@@ -1,0 +1,381 @@
+<title>REDEP Shift Board</title>
+<style>
+/* Layout: one combined grid per month, Group 1 and Group 2 as stacked rows
+   under shared date columns (matches the coordinator's own spreadsheet),
+   with a tap-a-cell panel below for assigning/clearing a shift by name. */
+:root {
+  --bg: #f3f1fb;
+  --surface: #ffffff;
+  --border: #e3ddf7;
+  --fg: #1c1832;
+  --muted: #6b6683;
+  --day: #3b82f6;
+  --day-soft: #dbeafe;
+  --night: #7c3aed;
+  --night-soft: #ede9fe;
+  --stat: #dc2626;
+  --stat-soft: #fee2e2;
+  --none: #e7e4f2;
+  --accent: #5b4fe0;
+  --accent-soft: #ece9fb;
+  --warn-bg: #fdecec;
+  --warn-fg: #b4231f;
+  --ok-bg: #e4f7ee;
+  --ok-fg: #1f7a4d;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #15121f; --surface: #1e1a2e; --border: #322c49; --fg: #f1eefc; --muted: #a39dc2;
+    --day: #60a5fa; --day-soft: #1e3a5f; --night: #a78bfa; --night-soft: #2e2251;
+    --stat: #f87171; --stat-soft: #3a1d1d; --none: #27223b;
+    --accent: #8b7ff5; --accent-soft: #2a2447;
+    --warn-bg: #3a1d1d; --warn-fg: #ff8d87; --ok-bg: #16301f; --ok-fg: #7fe0ac;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #15121f; --surface: #1e1a2e; --border: #322c49; --fg: #f1eefc; --muted: #a39dc2;
+  --day: #60a5fa; --day-soft: #1e3a5f; --night: #a78bfa; --night-soft: #2e2251;
+  --stat: #f87171; --stat-soft: #3a1d1d; --none: #27223b;
+  --accent: #8b7ff5; --accent-soft: #2a2447;
+  --warn-bg: #3a1d1d; --warn-fg: #ff8d87; --ok-bg: #16301f; --ok-fg: #7fe0ac;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 48px;
+  max-width: 900px; margin: 0 auto;
+}
+h1 { font-family: 'Space Grotesk', system-ui, sans-serif; font-size: 1.15rem; margin: 0 0 2px; }
+.subtitle { color: var(--muted); font-size: 0.8rem; margin: 0 0 14px; }
+.banner { background: var(--warn-bg); color: var(--warn-fg); border-radius: 10px; padding: 9px 12px; font-size: 0.76rem; line-height: 1.4; margin-bottom: 14px; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 0.72rem; color: var(--muted); margin-bottom: 16px; }
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
+.sw { width: 12px; height: 12px; border-radius: 4px; display: inline-block; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 16px; margin-bottom: 16px; overflow: hidden; }
+.card-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
+.card-head b { font-size: 0.95rem; font-family: 'Space Grotesk', system-ui, sans-serif; }
+.month-scroll { overflow-x: auto; margin: 0 -16px; padding: 0 16px; }
+.month-grid { display: grid; width: max-content; }
+.rowlabel {
+  position: sticky; left: 0; background: var(--surface); z-index: 2;
+  display: flex; align-items: center; font-size: 0.74rem; font-weight: 700; color: var(--fg);
+  padding-right: 8px; grid-column: 1;
+}
+.group-tag { display: inline-flex; align-items: center; gap: 5px; }
+.group-tag .sw { width: 8px; height: 8px; }
+.daynum { font-size: 0.66rem; color: var(--muted); text-align: center; padding-bottom: 3px; font-variant-numeric: tabular-nums; }
+.cell {
+  border-radius: 7px; height: 40px; margin: 1px; cursor: pointer;
+  display: flex; flex-direction: column; overflow: hidden; border: 1px solid transparent;
+}
+.cell:hover { border-color: var(--accent); }
+.cell.selected { border-color: var(--accent); border-width: 2px; }
+.half { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 0.56rem; font-weight: 700; color: white; padding: 0 2px; line-height: 1.05; text-align: center; overflow: hidden; }
+.half.day.assigned { background: var(--day); }
+.half.day.unassigned { background: var(--day-soft); color: var(--day); }
+.half.night.assigned { background: var(--night); }
+.half.night.unassigned { background: var(--night-soft); color: var(--night); }
+.half.stat { background: var(--stat); color: white; }
+.cell.none { background: var(--surface); border-color: var(--border); }
+.cell-out { height: 40px; margin: 1px; border-radius: 7px; background: var(--none); cursor: default; }
+.tally { font-size: 0.72rem; color: var(--muted); margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.panel { background: var(--accent-soft); border-radius: 12px; padding: 14px; margin-top: 14px; }
+.panel .date { font-weight: 700; font-size: 0.9rem; margin-bottom: 8px; }
+.shift-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-top: 1px solid var(--border); flex-wrap: wrap; }
+.shift-row:first-of-type { border-top: none; }
+.shift-row .label { font-weight: 700; font-size: 0.82rem; min-width: 70px; }
+.shift-row .who { font-size: 0.82rem; }
+.name-form { display: flex; gap: 6px; align-items: center; }
+.name-form input {
+  border: 1px solid var(--border); border-radius: 8px; padding: 6px 9px; font-size: 0.82rem;
+  background: var(--surface); color: var(--fg); width: 110px;
+}
+button.act { border: none; border-radius: 99px; padding: 6px 12px; font-size: 0.74rem; font-weight: 700; cursor: pointer; white-space: nowrap; }
+button.act.assign { background: var(--accent); color: white; }
+button.act.remove { background: var(--surface); color: var(--fg); border: 1px solid var(--border); }
+button.act:disabled { opacity: 0.5; cursor: default; }
+.loading, .error { font-size: 0.85rem; color: var(--muted); padding: 20px 0; }
+.error { color: var(--warn-fg); }
+.toast { font-size: 0.82rem; background: var(--ok-bg); color: var(--ok-fg); border-radius: 10px; padding: 9px 12px; margin-bottom: 12px; }
+.toast.err { background: var(--warn-bg); color: var(--warn-fg); }
+</style>
+
+<h1>REDEP Shift Board</h1>
+<p class="subtitle">Group 1 and Group 2, side by side. Tap a day to assign or clear a shift.</p>
+
+<div class="banner">This is the real schedule — changes here apply right away.</div>
+
+<div class="legend">
+  <span><span class="sw" style="background:var(--day)"></span>Day, assigned</span>
+  <span><span class="sw" style="background:var(--day-soft)"></span>Day, open</span>
+  <span><span class="sw" style="background:var(--night)"></span>Night, assigned</span>
+  <span><span class="sw" style="background:var(--night-soft)"></span>Night, open</span>
+  <span><span class="sw" style="background:var(--stat)"></span>Stat holiday</span>
+  <span><span class="sw" style="background:var(--none)"></span>Not available</span>
+  <span><span class="sw" style="background:var(--surface);border:1px solid var(--border)"></span>Open, tap to add</span>
+</div>
+
+<div id="toast"></div>
+<div id="app"><div class="loading">Loading…</div></div>
+
+<script>
+const STATE_URL = 'https://nkkkgehytwvrhoxkwvnr.supabase.co/functions/v1/redep-portal-state';
+const ACTION_URL = 'https://nkkkgehytwvrhoxkwvnr.supabase.co/functions/v1/redep-portal-action';
+const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ra2tnZWh5dHd2cmhveGt3dm5yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgzNjYxNjMsImV4cCI6MjA5Mzk0MjE2M30.ujfNxPs_cF991KBCiCNV3qpPeo63HCYMVsaN6hDJ_PU';
+const SHARED_TOKEN = 'ccbe10cc-2990-4b6c-98fc-c7809a0d87a3';
+
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+let state = null;
+let selected = null; // { programId, date }
+let busyKey = '';
+let draftNames = {}; // key "programId-date-type" -> text being typed
+
+// Always the whole calendar month (1st through the last day), regardless of
+// where the practicum window happens to start/end mid-month -- a grid that
+// starts on the 11th looks broken. Days outside the window are still shown,
+// just greyed and inert (see renderCombined).
+function daysInMonthRange(start, end) {
+  const months = [];
+  let [y, m] = start.split('-').slice(0,2).map(Number);
+  const [ey, em] = end.split('-').slice(0,2).map(Number);
+  while (y < ey || (y === ey && m <= em)) {
+    const lastOfMonth = new Date(y, m, 0).getDate();
+    const days = [];
+    for (let d = 1; d <= lastOfMonth; d++) {
+      days.push(y + '-' + String(m).padStart(2,'0') + '-' + String(d).padStart(2,'0'));
+    }
+    months.push({ label: MONTH_NAMES[m-1] + ' ' + y, days });
+    m++; if (m > 12) { m = 1; y++; }
+  }
+  return months;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+async function callFn(url, body) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + ANON_KEY, apikey: ANON_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  return res.json();
+}
+
+async function loadState() {
+  document.getElementById('app').innerHTML = '<div class="loading">Loading…</div>';
+  const data = await callFn(STATE_URL, { token: SHARED_TOKEN });
+  if (data.error) {
+    state = null;
+    document.getElementById('app').innerHTML = '<div class="error">' + escapeHtml(data.error) + '</div>';
+    return;
+  }
+  state = data;
+  render();
+}
+
+async function doAction(action, programId, date, type, name, busyId) {
+  busyKey = busyId;
+  render();
+  const data = await callFn(ACTION_URL, { token: SHARED_TOKEN, action, programId, shiftDate: date, shiftType: type, name });
+  busyKey = '';
+  if (data.error) {
+    showToast(data.error, true);
+    render();
+    return;
+  }
+  state = data;
+  showToast(action === 'unassign' ? 'Cleared.' : 'Assigned.', false);
+  if (action === 'assign') delete draftNames[programId + '-' + date + '-' + type];
+  render();
+}
+
+function showToast(msg, isError) {
+  const el = document.getElementById('toast');
+  el.innerHTML = '<div class="toast' + (isError ? ' err' : '') + '">' + escapeHtml(msg) + '</div>';
+  setTimeout(() => { if (el.firstChild) el.innerHTML = ''; }, 4000);
+}
+
+function dayNum(d) { return Number(d.slice(8,10)); }
+
+function renderCellContents(shifts, isStat) {
+  if (isStat) return '<div class="half stat">STAT</div>';
+  if (!shifts || shifts.length === 0) return '';
+  return shifts.map((s) => {
+    const kindClass = s.type === state.nightType ? 'night' : 'day';
+    const label = s.status === 'assigned' ? escapeHtml((s.name || '').split(' ')[0]) : 'OPEN';
+    return '<div class="half ' + kindClass + ' ' + s.status + '">' + label + '</div>';
+  }).join('');
+}
+
+// One grid per month, shared date columns, with a row per group underneath
+// -- matches the coordinator's own spreadsheet instead of two calendars the
+// reader has to compare by scrolling back and forth.
+function renderCombined(groups) {
+  const byGroup = groups.map((g) => {
+    const cellsByDate = {}, statByDate = {}, blockedByDate = {};
+    for (const d of g.days) {
+      cellsByDate[d.date] = d.cells;
+      statByDate[d.date] = d.isStatHoliday;
+      blockedByDate[d.date] = d.isBlocked;
+    }
+    return { group: g, cellsByDate, statByDate, blockedByDate };
+  });
+
+  const earliestStart = groups.reduce((min, g) => (g.start < min ? g.start : min), groups[0].start);
+  const latestEnd = groups.reduce((max, g) => (g.end > max ? g.end : max), groups[0].end);
+  const months = daysInMonthRange(earliestStart, latestEnd);
+
+  let html = '<div class="card">';
+  html += '<div class="card-head"><b>REDEP Shift Board</b></div>';
+  html += '<div style="display:flex;flex-wrap:wrap;gap:16px;font-size:0.85rem;color:var(--muted);margin-bottom:10px">';
+  for (const g of groups) html += '<span><b style="color:var(--fg)">' + escapeHtml(g.label.replace('REDEP Winter 2027 ', '')) + '</b>: ' + g.assigned + ' / ' + g.target + ' filled</span>';
+  html += '</div>';
+
+  for (const month of months) {
+    const nCols = month.days.length;
+    html += '<div style="font-size:0.74rem;font-weight:700;color:var(--muted);margin:12px 0 4px">' + month.label + '</div>';
+    html += '<div class="month-scroll"><div class="month-grid" style="grid-template-columns: 68px repeat(' + nCols + ', 54px); grid-template-rows: auto repeat(' + groups.length + ', auto);">';
+
+    html += '<div class="rowlabel" style="grid-row:1;grid-column:1"></div>';
+    month.days.forEach((d, i) => {
+      html += '<div class="daynum" style="grid-row:1;grid-column:' + (i + 2) + '">' + dayNum(d) + '</div>';
+    });
+
+    byGroup.forEach(({ group, cellsByDate, statByDate, blockedByDate }, gi) => {
+      const rowIndex = gi + 2;
+      const color = gi === 0 ? 'var(--day)' : 'var(--night)';
+      html += '<div class="rowlabel" style="grid-row:' + rowIndex + ';grid-column:1"><span class="group-tag"><span class="sw" style="background:' + color + ';border-radius:99px"></span>' + escapeHtml(group.label.replace('REDEP Winter 2027 ', '')) + '</span></div>';
+      month.days.forEach((d, i) => {
+        const inWindow = Object.prototype.hasOwnProperty.call(cellsByDate, d);
+        const isStat = statByDate[d];
+        const isBlocked = blockedByDate[d];
+
+        if (!inWindow || (isBlocked && !isStat)) {
+          // Outside the practicum window, or inside the lab-week buffer --
+          // greyed and inert either way, same as the coordinator's own
+          // "Not Available" category: nothing can be scheduled here.
+          html += '<div class="cell-out" style="grid-row:' + rowIndex + ';grid-column:' + (i + 2) + '"></div>';
+          return;
+        }
+
+        const shifts = cellsByDate[d] || [];
+        const isSel = selected && selected.programId === group.programId && selected.date === d;
+        const cls = (!isStat && shifts.length === 0) ? 'cell none' : 'cell';
+        html += '<div class="' + cls + (isSel ? ' selected' : '') + '" style="grid-row:' + rowIndex + ';grid-column:' + (i + 2) + '" data-program="' + group.programId + '" data-date="' + d + '">';
+        html += renderCellContents(shifts, isStat);
+        html += '</div>';
+      });
+    });
+
+    html += '</div></div>';
+  }
+
+  for (const g of groups) {
+    html += '<div class="tally">' + g.tally.filter((t) => t.shiftCount > 0).map((t) => escapeHtml(t.name) + ': ' + t.shiftCount).join('<span></span>') + '</div>';
+  }
+
+  if (selected) {
+    const match = byGroup.find((bg) => bg.group.programId === selected.programId);
+    const selectedDay = match ? match.group.days.find((d) => d.date === selected.date) : null;
+    if (selectedDay) {
+      html += '<div class="panel"><div class="date">' + escapeHtml(match.group.label.replace('REDEP Winter 2027 ', '')) + ' — ' + formatLong(selectedDay.date) + (selectedDay.isStatHoliday ? ' — Statutory holiday' : '') + '</div>';
+      if (selectedDay.isStatHoliday) {
+        html += '<div style="font-size:0.82rem;color:var(--muted)">Statutory holiday — no shift can be added.</div>';
+      } else if (selectedDay.cells.length === 0) {
+        // No shift exists yet this day -- offer to add either type as a
+        // brand-new shift, same "assign" action the backend already
+        // supports for a slot that doesn't exist.
+        html += shiftRowHtml({ type: state.dayType, status: 'unassigned', name: null }, match.group.programId, selectedDay.date, state.dayType, state.nightType);
+        html += shiftRowHtml({ type: state.nightType, status: 'unassigned', name: null }, match.group.programId, selectedDay.date, state.dayType, state.nightType);
+      } else {
+        for (const s of selectedDay.cells) {
+          html += shiftRowHtml(s, match.group.programId, selectedDay.date, state.dayType, state.nightType);
+        }
+      }
+      html += '</div>';
+    }
+  }
+
+  html += '</div>';
+  return html;
+}
+
+function formatLong(d) {
+  const [y, m, dd] = d.split('-').map(Number);
+  return new Date(y, m - 1, dd).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+}
+
+function shiftRowHtml(s, programId, date, dayType, nightType) {
+  const key = programId + '-' + date + '-' + s.type;
+  const busy = busyKey === key;
+  const label = s.type === nightType ? 'Night' : 'Day';
+  let right = '';
+  if (s.status === 'assigned') {
+    right = '<button type="button" class="act remove" data-remove="' + key + '" ' + (busy ? 'disabled' : '') + '>Clear</button>';
+    return '<div class="shift-row"><div class="label">' + label + '</div><div class="who">' + escapeHtml(s.name) + '</div>' + right + '</div>';
+  }
+  const draft = draftNames[key] || '';
+  right = '<div class="name-form">' +
+    '<input type="text" placeholder="Your name" value="' + escapeHtml(draft) + '" data-nameinput="' + key + '" ' + (busy ? 'disabled' : '') + '>' +
+    '<button type="button" class="act assign" data-assign="' + key + '" ' + (busy ? 'disabled' : '') + '>Assign</button>' +
+    '</div>';
+  return '<div class="shift-row"><div class="label">' + label + '</div><div class="who" style="color:var(--muted)">Unassigned</div>' + right + '</div>';
+}
+
+// Keys are "programId-date-type"; programId is a uuid (4 internal hyphens -> 5 parts),
+// date is 3 parts, type is 1 part with no hyphens of its own.
+function splitKey(key) {
+  const parts = key.split('-');
+  const type = parts.pop();
+  const date = parts.slice(-3).join('-');
+  const programId = parts.slice(0, -3).join('-');
+  return [programId, date, type];
+}
+
+function render() {
+  if (!state) return;
+  const app = document.getElementById('app');
+  app.innerHTML = renderCombined(state.groups);
+
+  app.querySelectorAll('.cell').forEach((el) => {
+    el.addEventListener('click', () => {
+      const programId = el.dataset.program;
+      const date = el.dataset.date;
+      selected = (selected && selected.programId === programId && selected.date === date) ? null : { programId, date };
+      render();
+    });
+  });
+  app.querySelectorAll('[data-nameinput]').forEach((el) => {
+    el.addEventListener('input', (e) => { draftNames[el.dataset.nameinput] = e.target.value; });
+    el.addEventListener('click', (e) => e.stopPropagation());
+    el.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); el.nextElementSibling?.click(); } });
+  });
+  app.querySelectorAll('[data-assign]').forEach((el) => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const k = el.dataset.assign;
+      const [programId, date, type] = splitKey(k);
+      const name = (draftNames[k] || '').trim();
+      if (!name) { showToast('Type a name first.', true); return; }
+      doAction('assign', programId, date, type, name, k);
+    });
+  });
+  app.querySelectorAll('[data-remove]').forEach((el) => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const [programId, date, type] = splitKey(el.dataset.remove);
+      doAction('unassign', programId, date, type, null, el.dataset.remove);
+    });
+  });
+}
+
+loadState();
+</script>
